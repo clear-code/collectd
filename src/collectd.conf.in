@@ -1156,8 +1156,10 @@
 #	</Query>
 #	<Writer sqlstore>
 #		# See contrib/postgresql/collectd_insert.sql for details
-#		Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9);"
+#		Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);"
 #		StoreRates true
+#		#MetaData false
+#		#MetaData "foo" "bar"
 #	</Writer>
 #	<Database foo>
 #		#Plugin "kingdom"

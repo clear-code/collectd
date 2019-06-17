@@ -103,6 +103,7 @@ typedef struct {
   char *name;
   char *statement;
   _Bool store_rates;
+  char **metadata_keys;
 } c_psql_writer_t;
 
 typedef struct {
@@ -775,6 +776,158 @@ static char *values_to_sqlarray(const data_set_t *ds, const value_list_t *vl,
   return string;
 } /* values_to_sqlarray */
 
+static char *add_string_to_json(const char *src, char **json,
+                                size_t *json_len) {
+  size_t len;
+
+  if (!src)
+    return NULL;
+
+  len = strlen(src);
+  if (*json_len < len + 1)
+    return NULL;
+
+  sstrncpy(*json, src, len + 1);
+  *json += len;
+  *json_len -= len;
+  return *json;
+}
+
+static char *add_escaped_string_to_json(const char *src, char **json,
+                                        size_t *json_len) {
+  size_t src_len = strlen(src);
+  char *dest_ptr = *json;
+  size_t dest_len = *json_len;
+  size_t i, start = 0;
+
+  if (json_len < 0)
+    return NULL;
+
+  for (i = 0; i <= src_len; i++) {
+    int segment_len;
+
+    if (i < src_len && src[i] != '"' && src[i] != '\\')
+      continue;
+
+    if (i == src_len)
+      segment_len = src_len - start;
+    else
+      segment_len = i - start;
+
+    if (segment_len > 0) {
+      if (dest_len < segment_len + 1)
+        return NULL;
+      sstrncpy(dest_ptr, &src[start], segment_len + 1);
+      dest_ptr += segment_len;
+      dest_len -= segment_len;
+    }
+
+    if (src[i] == '"') {
+      if (!add_string_to_json("\\\"", &dest_ptr, &dest_len))
+        return NULL;
+    } else if (src[i] == '\\') {
+      if (!add_string_to_json("\\\\", &dest_ptr, &dest_len))
+        return NULL;
+    }
+
+    start = i + 1;
+  }
+
+  *json = dest_ptr;
+  *json_len = dest_len;
+
+  return *json;
+}
+
+static char *add_metadata_to_json(meta_data_t *meta, const char *key,
+                                  char **json, size_t *json_len) {
+  char *value = NULL;
+
+  if (!add_string_to_json(",\"", json, json_len))
+    return NULL;
+
+  if (!add_escaped_string_to_json(key, json, json_len))
+    return NULL;
+
+  if (!add_string_to_json("\":", json, json_len))
+    return NULL;
+
+  if (meta_data_as_string(meta, key, &value) == 0) {
+    int type = meta_data_type(meta, key);
+
+    if (type == MD_TYPE_STRING) {
+      if (!add_string_to_json("\"", json, json_len))
+        return NULL;
+    }
+
+    if (!add_escaped_string_to_json(value, json, json_len)) {
+      sfree(value);
+      return NULL;
+    }
+    sfree(value);
+
+    if (type == MD_TYPE_STRING) {
+      if (!add_string_to_json("\"", json, json_len))
+        return NULL;
+    }
+  }
+
+  return *json;
+}
+
+static char *metadata_to_json(char **metadata_keys, const value_list_t *vl,
+                              char *json, size_t json_len) {
+  char *str_ptr;
+  size_t str_len;
+  char **keys = NULL;
+  char **toc = NULL;
+  int num = 0, result_num = 0, i;
+
+  if (!json || json_len <= 0)
+    return NULL;
+
+  str_ptr = json;
+  str_len = json_len;
+
+  if (metadata_keys && metadata_keys[0] == NULL) {
+    num = meta_data_toc(vl->meta, &toc);
+    keys = toc;
+  } else {
+    keys = metadata_keys;
+    for (i = 0; keys && keys[i]; i++)
+      ;
+    num = i;
+  }
+
+  for (i = 0; i < num; i++) {
+    if (meta_data_exists(vl->meta, keys[i]) > 0) {
+      if (!add_metadata_to_json(vl->meta, keys[i], &str_ptr, &str_len))
+        goto ERROR;
+      result_num++;
+    }
+  }
+  if (result_num > 0) {
+    if (!add_string_to_json("}", &str_ptr, &str_len))
+      goto ERROR;
+    json[0] = '{';
+  } else {
+    json[0] = '\0';
+  }
+
+  for (i = 0; toc && i < num; i++)
+    sfree(toc[i]);
+  sfree(toc);
+
+  return json;
+
+ERROR:
+  for (i = 0; toc && i < num; i++)
+    sfree(toc[i]);
+  sfree(toc);
+
+  return NULL;
+}
+
 static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
                         user_data_t *ud) {
   c_psql_database_t *db;
@@ -783,8 +936,9 @@ static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
   char values_name_str[1024];
   char values_type_str[1024];
   char values_str[1024];
+  char metadata_str[1024] = {0};
 
-  const char *params[9];
+  const char *params[10];
 
   int success = 0;
 
@@ -854,8 +1008,17 @@ static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
       return -1;
     }
 
+    if (writer->metadata_keys) {
+      if (!metadata_to_json(writer->metadata_keys, vl, metadata_str,
+                            sizeof(metadata_str))) {
+        pthread_mutex_unlock(&db->db_lock);
+        return -1;
+      }
+    }
+
     params[7] = values_type_str;
     params[8] = values_str;
+    params[9] = *metadata_str ? metadata_str : NULL;
 
     res = PQexecParams(db->conn, writer->statement, STATIC_ARRAY_SIZE(params),
                        NULL, (const char *const *)params, NULL, NULL,
@@ -1073,6 +1236,53 @@ static int config_add_writer(oconfig_item_t *ci, c_psql_writer_t *src_writers,
   return 0;
 } /* config_add_writer */
 
+static int config_add_meta(c_psql_writer_t *writer, oconfig_item_t *ci) {
+  int i, curr_len, new_len;
+
+  /*
+   * MetaData true:  Write all meta data in a metric
+   * MetaData false: Don't write meta data
+   */
+  if (ci->values_num == 1 && ci->values[0].type == OCONFIG_TYPE_BOOLEAN) {
+    for (i = 0; writer->metadata_keys && writer->metadata_keys[i]; i++)
+      sfree(writer->metadata_keys[i]);
+    sfree(writer->metadata_keys);
+
+    if (ci->values[0].value.boolean) {
+      writer->metadata_keys = calloc(1, sizeof(char *));
+      writer->metadata_keys[0] = NULL;
+    }
+
+    return 0;
+  }
+
+  /*
+   * MetaData "foo" "bar" ...: Write only specified meta data
+   */
+  for (i = 0; writer->metadata_keys && writer->metadata_keys[i]; i++)
+    ;
+
+  curr_len = i;
+  new_len = curr_len + ci->values_num;
+
+  for (i = 0; i < ci->values_num; i++) {
+    if (ci->values[i].type != OCONFIG_TYPE_STRING) {
+      log_warn("Only string arguments are allowed to the `MetaData' option.");
+      return -1;
+    }
+  }
+
+  writer->metadata_keys =
+      realloc(writer->metadata_keys, sizeof(char *) * (new_len + 1));
+  writer->metadata_keys[new_len] = NULL;
+
+  for (i = 0; i < ci->values_num; i++) {
+    writer->metadata_keys[i + curr_len] = sstrdup(ci->values[i].value.string);
+  }
+
+  return 0;
+}
+
 static int c_psql_config_writer(oconfig_item_t *ci) {
   c_psql_writer_t *writer;
   c_psql_writer_t *tmp;
@@ -1097,6 +1307,7 @@ static int c_psql_config_writer(oconfig_item_t *ci) {
   writer->name = sstrdup(ci->values[0].value.string);
   writer->statement = NULL;
   writer->store_rates = 1;
+  writer->metadata_keys = NULL;
 
   for (int i = 0; i < ci->children_num; ++i) {
     oconfig_item_t *c = ci->children + i;
@@ -1105,13 +1316,19 @@ static int c_psql_config_writer(oconfig_item_t *ci) {
       status = cf_util_get_string(c, &writer->statement);
     else if (strcasecmp("StoreRates", c->key) == 0)
       status = cf_util_get_boolean(c, &writer->store_rates);
+    else if (strcasecmp("MetaData", c->key) == 0)
+      status = config_add_meta(writer, c);
     else
       log_warn("Ignoring unknown config key \"%s\".", c->key);
   }
 
   if (status != 0) {
+    int i;
     sfree(writer->statement);
     sfree(writer->name);
+    for (i = 0; writer->metadata_keys && writer->metadata_keys[i]; i++)
+      sfree(writer->metadata_keys[i]);
+    sfree(writer->metadata_keys);
     return status;
   }
 

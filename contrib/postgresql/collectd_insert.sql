@@ -45,7 +45,7 @@
 --
 -- <Plugin postgresql>
 --     <Writer sqlstore>
---         Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9);"
+--         Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);"
 --     </Writer>
 --     <Database foo>
 --         # ...
@@ -59,7 +59,8 @@ CREATE TABLE identifiers (
     plugin character varying(64) NOT NULL,
     plugin_inst character varying(64) DEFAULT NULL::character varying,
     type character varying(64) NOT NULL,
-    type_inst character varying(64) DEFAULT NULL::character varying
+    type_inst character varying(64) DEFAULT NULL::character varying,
+    meta jsonb
 );
 CREATE SEQUENCE identifiers_id_seq
     START WITH 1
@@ -71,8 +72,8 @@ ALTER SEQUENCE identifiers_id_seq OWNED BY identifiers.id;
 ALTER TABLE ONLY identifiers
     ALTER COLUMN id SET DEFAULT nextval('identifiers_id_seq'::regclass);
 ALTER TABLE ONLY identifiers
-    ADD CONSTRAINT identifiers_host_plugin_plugin_inst_type_type_inst_key
-        UNIQUE (host, plugin, plugin_inst, type, type_inst);
+    ADD CONSTRAINT identifiers_host_plugin_plugin_inst_type_type_inst_meta_key
+        UNIQUE (host, plugin, plugin_inst, type, type_inst, meta);
 ALTER TABLE ONLY identifiers
     ADD CONSTRAINT identifiers_pkey PRIMARY KEY (id);
 
@@ -191,7 +192,8 @@ CREATE OR REPLACE FUNCTION collectd_insert(
         timestamp with time zone, character varying,
         character varying, character varying,
         character varying, character varying,
-        character varying[], character varying[], double precision[]
+        character varying[], character varying[], double precision[],
+        character varying
     ) RETURNS void
     LANGUAGE plpgsql
     AS $_$
@@ -206,6 +208,7 @@ DECLARE
     -- don't use the type info; for 'StoreRates true' it's 'gauge' anyway
     -- p_type_names alias for $8;
     p_values alias for $9;
+    p_meta alias for $10;
     ds_id integer;
     i integer;
 BEGIN
@@ -215,10 +218,11 @@ BEGIN
             AND plugin = p_plugin
             AND COALESCE(plugin_inst, '') = COALESCE(p_plugin_instance, '')
             AND type = p_type
-            AND COALESCE(type_inst, '') = COALESCE(p_type_instance, '');
+            AND COALESCE(type_inst, '') = COALESCE(p_type_instance, '')
+            AND meta = to_jsonb(p_meta);
     IF NOT FOUND THEN
-        INSERT INTO identifiers (host, plugin, plugin_inst, type, type_inst)
-            VALUES (p_host, p_plugin, p_plugin_instance, p_type, p_type_instance)
+        INSERT INTO identifiers (host, plugin, plugin_inst, type, type_inst, meta)
+            VALUES (p_host, p_plugin, p_plugin_instance, p_type, p_type_instance, to_jsonb(p_meta))
             RETURNING id INTO ds_id;
     END IF;
     i := 1;
