@@ -1755,6 +1755,7 @@
 #@BUILD_PLUGIN_MATCH_REGEX_TRUE@LoadPlugin match_regex
 #@BUILD_PLUGIN_MATCH_VALUE_TRUE@LoadPlugin match_value
 #@BUILD_PLUGIN_MATCH_TIMEDIFF_TRUE@LoadPlugin match_timediff
+#@BUILD_PLUGIN_MATCH_INTERVAL_TRUE@LoadPlugin match_interval
 
 # Load required targets:
 #@BUILD_PLUGIN_TARGET_NOTIFICATION_TRUE@LoadPlugin target_notification
