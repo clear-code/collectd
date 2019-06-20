@@ -11692,6 +11692,64 @@ Example:
    Target "stop"
  </Chain>
 
+=item B<interval>
+
+Matches values by arrival intervals.
+
+This match is mainly intended for dropping too frequent arrival values focedly
+at server side. This plugin stores previous arrival times for each values and
+match the interval against the interval range which is specified in this
+configuration. The first arrival value just after launching collectd is always
+unmatched.
+
+Available options:
+
+=over 4
+
+=item B<Min> I<Seconds>
+
+Minimum interval to match in seconds.
+
+=item B<Max> I<Seconds>
+
+Max interval to match in seconds.
+
+=item B<Invert> I<false|true>
+
+When set to true, the result of the match is inverted.
+
+=item B<UpdateTimestamp> I<"always|match|unmatch">
+
+When set to "match" or "unmatch", the stored timestamps of each values are
+updated only when the matching result is matched or unmatched after matching.
+Otherwise the timestapms are always updated after matching is performed.
+The default is "always".
+
+=item B<Expire> I<Seconds>
+
+Expire the stored timestamps from the memory when a value doesn't arrive more
+than the interval which is specified by this option. Because this plugin stores
+all timestamps for each values, some of them may become garbage when the
+identifiers are changed or clients are removed.
+The default is 0 (never expire).
+
+=back
+
+Example:
+
+ <Match "interval">
+   Max 300
+   UpdateTimestamp "unmatch"
+   Expire 86400
+ </Match>
+
+When this configuration is specified with 'B<Target "stop">', the values which
+within 5 minutes from last arrival will be dropped. In this case the timestamps
+shouldn't be updated until the interval exceeds the B<Max> value,
+B<UpdateTimeStamp> is set to B<unmatch>.
+The previous timestamps will be expired when the value doesn't come for more
+then one day.
+
 =back
 
 =head2 Available targets
