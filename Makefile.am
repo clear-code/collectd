@@ -1253,6 +1253,12 @@ match_value_la_SOURCES = src/match_value.c
 match_value_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 endif
 
+if BUILD_PLUGIN_MATCH_IPADDRESS
+pkglib_LTLIBRARIES += match_ipaddress.la
+match_ipaddress_la_SOURCES = src/match_ipaddress.c
+match_ipaddress_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+endif
+
 if BUILD_PLUGIN_MBMON
 pkglib_LTLIBRARIES += mbmon.la
 mbmon_la_SOURCES = src/mbmon.c
