@@ -11750,6 +11750,37 @@ B<UpdateTimeStamp> is set to B<unmatch>.
 The previous timestamps will be expired when the value doesn't come for more
 then one day.
 
+=item B<ipaddress>
+
+Matches values by sender's IP address. The list of IP addresses to match is
+provided by an external plain text file.
+
+Available options:
+
+=over 4
+
+=item B<FilePath> I<Path>
+
+The path of a file which contains IP addresses to match.
+Example of the content of the file:
+
+ 192.168.0.10
+ 192.168.0.11
+ 192.168.0.12
+
+=item B<Invert> I<false|true>
+
+When set to true, the result of the match is inverted.
+
+=back
+
+Example:
+
+ <Match "ipaddress">
+   FilePath "/etc/collectd.d/ipaddress"
+   Invert true
+ </Match>
+
 =back
 
 =head2 Available targets
