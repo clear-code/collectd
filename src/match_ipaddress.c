@@ -120,7 +120,7 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
 
     status = c_avl_insert(tree, ipaddress_copy, ipaddress_copy);
     if (status != 0) {
-      free(ipaddress_copy);
+      sfree(ipaddress_copy);
       continue;
     }
 
