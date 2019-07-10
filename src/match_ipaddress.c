@@ -209,15 +209,34 @@ static int match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /
 				 notification_meta_t __attribute__((unused)) * *meta,
 				 void **user_data) {
   match_ipaddress_t *m;
+  int match_value = FC_MATCH_MATCHES;
+  int nomatch_value = FC_MATCH_NO_MATCH;
+  char *ipaddress = NULL;
+  int status;
 
   if ((user_data == NULL) || (*user_data == NULL))
     return -1;
 
   m = *user_data;
 
+  if (m->invert) {
+    match_value = FC_MATCH_NO_MATCH;
+    nomatch_value = FC_MATCH_MATCHES;
+  }
+
+  if (vl->meta == NULL)
+    return nomatch_value;
+
+  status = meta_data_get_string(vl->meta, "network:ip_address", &ipaddress);
+  if (status == (-ENOENT)) /* key is not present */
+    return nomatch_value;
+
   check_file(m);
 
-  return FC_MATCH_NO_MATCH;
+  if (c_avl_get(m->addresses, ipaddress, NULL) == 0)
+    return match_value;
+  else
+    return nomatch_value;
 } /* }}} int match_ipaddress_match */
 
 void module_register(void) {
