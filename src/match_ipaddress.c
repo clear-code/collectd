@@ -120,9 +120,9 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
       continue;
 
     if (inet_pton(AF_INET, ipaddress, &addr4) <= 0 &&
-	inet_pton(AF_INET6, ipaddress, &addr6) <= 0) {
-      log_err("Invalid IP address: file = %s, address = %s",
-	      m->file_path, ipaddress);
+        inet_pton(AF_INET6, ipaddress, &addr6) <= 0) {
+      log_err("Invalid IP address: file = %s, address = %s", m->file_path,
+              ipaddress);
       continue;
     }
 
@@ -166,7 +166,8 @@ static int check_file(match_ipaddress_t *m) /* {{{ */
   return status;
 } /* }}} int check_file */
 
-static int match_ipaddress_create(const oconfig_item_t *ci, void **user_data) /* {{{ */
+static int match_ipaddress_create(const oconfig_item_t *ci,
+                                  void **user_data) /* {{{ */
 {
   match_ipaddress_t *m;
   int status = 0;
@@ -222,9 +223,10 @@ static int match_ipaddress_destroy(void **user_data) /* {{{ */
   return 0;
 } /* }}} int match_ipaddress_destroy */
 
-static int match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
-				 notification_meta_t __attribute__((unused)) * *meta,
-				 void **user_data) {
+static int
+match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
+                      notification_meta_t __attribute__((unused)) * *meta,
+                      void **user_data) {
   match_ipaddress_t *m;
   int match_value = FC_MATCH_MATCHES;
   int nomatch_value = FC_MATCH_NO_MATCH;
