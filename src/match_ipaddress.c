@@ -26,22 +26,180 @@
 
 #include "collectd.h"
 #include "filter_chain.h"
+#include "utils/avltree/avltree.h"
+#include "utils/common/common.h"
+
+#define log_debug(...) DEBUG("match_ipaddress: " __VA_ARGS__)
+#define log_info(...) INFO("match_ipaddress: " __VA_ARGS__)
+#define log_warn(...) WARN("match_ipaddress: " __VA_ARGS__)
+#define log_err(...) ERROR("match_ipaddress: " __VA_ARGS__)
+
+struct match_ipaddress_s {
+  time_t mtime;
+  char *file_path;
+  c_avl_tree_t *addresses;
+  bool invert;
+};
+typedef struct match_ipaddress_s match_ipaddress_t;
+
+static void free_addresses(c_avl_tree_t *addresses) /* {{{ */
+{
+  int status;
+
+  if (addresses == NULL)
+    return;
+
+  while (true) {
+    char *key = NULL;
+    char *value = NULL;
+
+    status = c_avl_pick(addresses, (void *)&key, (void *)&value);
+    if (status != 0)
+      break;
+
+    sfree(key);
+    // key == value
+  }
+
+  c_avl_destroy(addresses);
+} /* }}} void free_addresses */
+
+static int read_file(match_ipaddress_t *m) /* {{{ */
+{
+  FILE *fh;
+  char buffer[64];
+  struct flock fl = {0};
+  c_avl_tree_t *tree;
+  int status;
+
+  fh = fopen(m->file_path, "r");
+  if (fh == NULL)
+    return -1;
+
+  fl.l_type = F_RDLCK;
+  fl.l_whence = SEEK_SET;
+
+  status = fcntl(fileno(fh), F_SETLK, &fl);
+  if (status != 0) {
+    fclose(fh);
+    return -1;
+  }
+
+  tree = c_avl_create((int (*)(const void *, const void *))strcmp);
+  if (tree == NULL) {
+    fclose(fh);
+    return -1;
+  }
+
+  /* Read `fh' into `tree' */
+  while (fgets(buffer, sizeof(buffer), fh) != NULL) /* {{{ */
+  {
+    size_t len;
+    char *ipaddress, *ipaddress_copy;
+
+    buffer[sizeof(buffer) - 1] = '\0';
+    len = strlen(buffer);
+
+    /* Remove trailing newline characters. */
+    while ((len > 0) &&
+           ((buffer[len - 1] == '\n') || (buffer[len - 1] == '\r'))) {
+      len--;
+      buffer[len] = 0;
+    }
+
+    /* Seek first non-space character */
+    ipaddress = buffer;
+    while ((*ipaddress != 0) && isspace((int)*ipaddress))
+      ipaddress++;
+
+    /* Skip empty lines and comments */
+    if ((ipaddress[0] == 0) || (ipaddress[0] == '#'))
+      continue;
+
+    ipaddress_copy = sstrdup(ipaddress);
+
+    status = c_avl_insert(tree, ipaddress_copy, ipaddress_copy);
+    if (status != 0) {
+      free(ipaddress_copy);
+      continue;
+    }
+
+    log_debug("ipaddress: %s", ipaddress);
+  } /* }}} while (fgets) */
+
+  fclose(fh);
+
+  free_addresses(m->addresses);
+  m->addresses = tree;
+
+  return 0;
+} /* }}} int read_file */
+
+static int check_file(match_ipaddress_t *m) /* {{{ */
+{
+  struct stat statbuf = {0};
+  int status;
+
+  status = stat(m->file_path, &statbuf);
+  if (status != 0)
+    return -1;
+
+  if (m->mtime >= statbuf.st_mtime)
+    return 0;
+
+  status = read_file(m);
+  if (status == 0)
+    m->mtime = statbuf.st_mtime;
+
+  return status;
+} /* }}} int check_file */
 
 static int match_ipaddress_create(const oconfig_item_t *ci, void **user_data) /* {{{ */
 {
-  return 0;
+  match_ipaddress_t *m;
+  int status = 0;
+
+  m = calloc(1, sizeof(*m));
+  if (m == NULL) {
+    log_err("calloc failed.");
+    return -ENOMEM;
+  }
+
+  m->file_path = NULL;
+  m->addresses = NULL;
+  m->invert = false;
+
+  return status;
 }
+
+static void match_ipaddress_free(match_ipaddress_t *m) /* {{{ */
+{
+  free_addresses(m->addresses);
+  sfree(m->file_path);
+  sfree(m);
+} /* }}} void match_ipaddress_free */
 
 static int match_ipaddress_destroy(void **user_data) /* {{{ */
 {
+  if ((user_data != NULL) && (*user_data != NULL))
+    match_ipaddress_free(*user_data);
   return 0;
 } /* }}} int match_ipaddress_destroy */
 
 static int match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
 				 notification_meta_t __attribute__((unused)) * *meta,
 				 void **user_data) {
+  match_ipaddress_t *m;
+
+  if ((user_data == NULL) || (*user_data == NULL))
+    return -1;
+
+  m = *user_data;
+
+  check_file(m);
+
   return FC_MATCH_NO_MATCH;
-}
+} /* }}} int match_ipaddress_match */
 
 void module_register(void) {
   match_proc_t mproc = {0};
