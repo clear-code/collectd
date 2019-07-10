@@ -226,11 +226,11 @@ static int match_ipaddress_create(const oconfig_item_t *ci,
   for (int i = 0; i < ci->children_num; i++) {
     oconfig_item_t *child = ci->children + i;
 
-    if (strcasecmp("FilePath", child->key) == 0)
+    if (strcasecmp("FilePath", child->key) == 0) {
       status = cf_util_get_string(child, &m->file_path);
-    else if (strcasecmp("Invert", child->key) == 0)
+    } else if (strcasecmp("Invert", child->key) == 0) {
       status = cf_util_get_boolean(child, &m->invert);
-    else {
+    } else {
       log_err("The `%s' configuration option is not understood and "
               "will be ignored.",
               child->key);
