@@ -37,8 +37,9 @@
 struct match_ipaddress_s {
   time_t mtime;
   char *file_path;
-  c_avl_tree_t *addresses;
   bool invert;
+  c_avl_tree_t *addresses;
+  pthread_rwlock_t addresses_lock;
 };
 typedef struct match_ipaddress_s match_ipaddress_t;
 
@@ -129,8 +130,10 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
 
   fclose(fh);
 
+  pthread_rwlock_wrlock(&m->addresses_lock);
   free_addresses(m->addresses);
   m->addresses = tree;
+  pthread_rwlock_unlock(&m->addresses_lock);
 
   return 0;
 } /* }}} int read_file */
@@ -233,7 +236,11 @@ static int match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /
 
   check_file(m);
 
-  if (c_avl_get(m->addresses, ipaddress, NULL) == 0)
+  pthread_rwlock_rdlock(&m->addresses_lock);
+  status = c_avl_get(m->addresses, ipaddress, NULL);
+  pthread_rwlock_unlock(&m->addresses_lock);
+
+  if (status == 0)
     return match_value;
   else
     return nomatch_value;
