@@ -171,6 +171,11 @@ static int match_ipaddress_create(const oconfig_item_t *ci, void **user_data) /*
   m->file_path = NULL;
   m->addresses = NULL;
   m->invert = false;
+  status = pthread_rwlock_init(&m->addresses_lock, NULL);
+  if (status != 0) {
+    log_err("Failed to initialize rwlock, err %u", status);
+    return status;
+  }
 
   status = 0;
   for (int i = 0; i < ci->children_num; i++) {
