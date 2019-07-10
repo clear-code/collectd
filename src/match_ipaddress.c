@@ -242,7 +242,10 @@ static int match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /
   check_file(m);
 
   pthread_rwlock_rdlock(&m->addresses_lock);
-  status = c_avl_get(m->addresses, ipaddress, NULL);
+  if (m->addresses)
+    status = c_avl_get(m->addresses, ipaddress, NULL);
+  else
+    status = -1;
   pthread_rwlock_unlock(&m->addresses_lock);
 
   if (status == 0)
