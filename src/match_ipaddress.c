@@ -60,11 +60,36 @@ static void free_addresses(c_avl_tree_t *addresses) /* {{{ */
       break;
 
     sfree(key);
-    // key == value
+    sfree(value);
   }
 
   c_avl_destroy(addresses);
 } /* }}} void free_addresses */
+
+static int sockaddrcmp(const struct sockaddr *addr1,
+                       const struct sockaddr *addr2) {
+  if (!addr1)
+    return -1;
+  if (!addr2)
+    return 1;
+  if (addr1->sa_family != addr2->sa_family)
+    return addr1->sa_family - addr2->sa_family;
+  switch (addr1->sa_family) {
+  case AF_INET: {
+    const struct sockaddr_in *v4addr1 = (const struct sockaddr_in *)addr1;
+    const struct sockaddr_in *v4addr2 = (const struct sockaddr_in *)addr2;
+    return v4addr1->sin_addr.s_addr - v4addr2->sin_addr.s_addr;
+  }
+  case AF_INET6: {
+    const struct sockaddr_in6 *v6addr1 = (const struct sockaddr_in6 *)addr1;
+    const struct sockaddr_in6 *v6addr2 = (const struct sockaddr_in6 *)addr2;
+    return memcmp(v6addr1->sin6_addr.s6_addr, v6addr2->sin6_addr.s6_addr, 16);
+  }
+  default:
+    return -1;
+  }
+  return -1;
+}
 
 static int read_file(match_ipaddress_t *m) /* {{{ */
 {
@@ -87,7 +112,7 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
     return -1;
   }
 
-  tree = c_avl_create((int (*)(const void *, const void *))strcmp);
+  tree = c_avl_create((int (*)(const void *, const void *))sockaddrcmp);
   if (tree == NULL) {
     fclose(fh);
     return -1;
@@ -97,8 +122,9 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
   {
     size_t len;
     char *ipaddress, *ipaddress_copy;
-    struct in_addr addr4;
-    struct in6_addr addr6;
+    struct sockaddr_in v4addr = {0};
+    struct sockaddr_in6 v6addr = {0};
+    struct sockaddr *addr = NULL;
 
     buffer[sizeof(buffer) - 1] = '\0';
     len = strlen(buffer);
@@ -119,8 +145,16 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
     if ((ipaddress[0] == 0) || (ipaddress[0] == '#'))
       continue;
 
-    if (inet_pton(AF_INET, ipaddress, &addr4) <= 0 &&
-        inet_pton(AF_INET6, ipaddress, &addr6) <= 0) {
+    /* Convert the address to a binary format */
+    if (inet_pton(AF_INET, ipaddress, &v4addr.sin_addr) == 1) {
+      v4addr.sin_family = AF_INET;
+      addr = smalloc(sizeof(v4addr));
+      memcpy(addr, &v4addr, sizeof(v4addr));
+    } else if (inet_pton(AF_INET6, ipaddress, &v6addr.sin6_addr) == 1) {
+      v6addr.sin6_family = AF_INET6;
+      addr = smalloc(sizeof(v6addr));
+      memcpy(addr, &v6addr, sizeof(v6addr));
+    } else {
       log_err("Invalid IP address: file = %s, address = %s", m->file_path,
               ipaddress);
       continue;
@@ -128,8 +162,9 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
 
     ipaddress_copy = sstrdup(ipaddress);
 
-    status = c_avl_insert(tree, ipaddress_copy, ipaddress_copy);
+    status = c_avl_insert(tree, addr, ipaddress_copy);
     if (status != 0) {
+      sfree(addr);
       sfree(ipaddress_copy);
       continue;
     }
@@ -231,6 +266,9 @@ match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
   int match_value = FC_MATCH_MATCHES;
   int nomatch_value = FC_MATCH_NO_MATCH;
   char *ipaddress = NULL;
+  const struct sockaddr *addr = NULL;
+  struct sockaddr_in v4addr = {0};
+  struct sockaddr_in6 v6addr = {0};
   int status;
 
   if ((user_data == NULL) || (*user_data == NULL))
@@ -250,11 +288,21 @@ match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
   if (status == (-ENOENT)) /* key is not present */
     return nomatch_value;
 
+  if (inet_pton(AF_INET, ipaddress, &v4addr.sin_addr) == 1) {
+    v4addr.sin_family = AF_INET;
+    addr = (const struct sockaddr *)&v4addr;
+  } else if (inet_pton(AF_INET6, ipaddress, &v6addr.sin6_addr) == 1) {
+    v6addr.sin6_family = AF_INET6;
+    addr = (const struct sockaddr *)&v6addr;
+  } else {
+    return nomatch_value;
+  }
+
   check_file(m);
 
   pthread_rwlock_rdlock(&m->addresses_lock);
   if (m->addresses)
-    status = c_avl_get(m->addresses, ipaddress, NULL);
+    status = c_avl_get(m->addresses, addr, NULL);
   else
     status = -1;
   pthread_rwlock_unlock(&m->addresses_lock);
