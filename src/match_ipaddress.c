@@ -169,6 +169,25 @@ static int match_ipaddress_create(const oconfig_item_t *ci, void **user_data) /*
   m->addresses = NULL;
   m->invert = false;
 
+  status = 0;
+  for (int i = 0; i < ci->children_num; i++) {
+    oconfig_item_t *child = ci->children + i;
+
+    if (strcasecmp("FilePath", child->key) == 0)
+      status = cf_util_get_string(child, &m->file_path);
+    else if (strcasecmp("Invert", child->key) == 0)
+      status = cf_util_get_boolean(child, &m->invert);
+    else {
+      log_err("The `%s' configuration option is not understood and "
+              "will be ignored.",
+              child->key);
+      status = 0;
+    }
+
+    if (status != 0)
+      break;
+  }
+
   return status;
 }
 
