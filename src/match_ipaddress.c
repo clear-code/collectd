@@ -92,7 +92,6 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
     return -1;
   }
 
-  /* Read `fh' into `tree' */
   while (fgets(buffer, sizeof(buffer), fh) != NULL) /* {{{ */
   {
     size_t len;
