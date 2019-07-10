@@ -28,6 +28,7 @@
 #include "filter_chain.h"
 #include "utils/avltree/avltree.h"
 #include "utils/common/common.h"
+#include <arpa/inet.h>
 
 #define log_debug(...) DEBUG("match_ipaddress: " __VA_ARGS__)
 #define log_info(...) INFO("match_ipaddress: " __VA_ARGS__)
@@ -96,6 +97,8 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
   {
     size_t len;
     char *ipaddress, *ipaddress_copy;
+    struct in_addr addr4;
+    struct in6_addr addr6;
 
     buffer[sizeof(buffer) - 1] = '\0';
     len = strlen(buffer);
@@ -115,6 +118,13 @@ static int read_file(match_ipaddress_t *m) /* {{{ */
     /* Skip empty lines and comments */
     if ((ipaddress[0] == 0) || (ipaddress[0] == '#'))
       continue;
+
+    if (inet_pton(AF_INET, ipaddress, &addr4) <= 0 &&
+	inet_pton(AF_INET6, ipaddress, &addr6) <= 0) {
+      log_err("Invalid IP address: file = %s, address = %s",
+	      m->file_path, ipaddress);
+      continue;
+    }
 
     ipaddress_copy = sstrdup(ipaddress);
 
