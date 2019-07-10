@@ -259,6 +259,8 @@ match_ipaddress_match(const data_set_t *ds, const value_list_t *vl, /* {{{ */
     status = -1;
   pthread_rwlock_unlock(&m->addresses_lock);
 
+  sfree(ipaddress);
+
   if (status == 0)
     return match_value;
   else
