@@ -241,6 +241,8 @@ static int match_ipaddress_create(const oconfig_item_t *ci,
       break;
   }
 
+  *user_data = m;
+
   return status;
 }
 
