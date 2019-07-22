@@ -932,7 +932,7 @@ static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
   char values_name_str[1024];
   char values_type_str[1024];
   char values_str[1024];
-  char metadata_str[1024] = {0};
+  char metadata_str[4096] = {0};
 
   const char *params[10];
   int num_params = STATIC_ARRAY_SIZE(params);
