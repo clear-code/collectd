@@ -935,6 +935,7 @@ static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
   char metadata_str[1024] = {0};
 
   const char *params[10];
+  int num_params = STATIC_ARRAY_SIZE(params);
 
   int success = 0;
 
@@ -1015,8 +1016,10 @@ static int c_psql_write(const data_set_t *ds, const value_list_t *vl,
     params[7] = values_type_str;
     params[8] = values_str;
     params[9] = *metadata_str ? metadata_str : NULL;
+    if (writer->metadata_keys == NULL)
+      num_params -= 1;
 
-    res = PQexecParams(db->conn, writer->statement, STATIC_ARRAY_SIZE(params),
+    res = PQexecParams(db->conn, writer->statement, num_params,
                        NULL, (const char *const *)params, NULL, NULL,
                        /* return text data */ 0);
 
