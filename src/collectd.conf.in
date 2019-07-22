@@ -1211,10 +1211,12 @@
 #	</Query>
 #	<Writer sqlstore>
 #		# See contrib/postgresql/collectd_insert.sql for details
-#		Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);"
+#		Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9);"
 #		StoreRates true
-#		#MetaData false
-#		#MetaData "foo" "bar"
+#		# Meta data can be added to the 10th argument as a JSON string
+#		# Statement "SELECT collectd_insert($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);"
+#		# MetaData true
+#		# MetaData "network:username" "network:received"
 #	</Writer>
 #	<Database foo>
 #		#Plugin "kingdom"
