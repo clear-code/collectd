@@ -59,8 +59,7 @@ CREATE TABLE identifiers (
     plugin character varying(64) NOT NULL,
     plugin_inst character varying(64) DEFAULT NULL::character varying,
     type character varying(64) NOT NULL,
-    type_inst character varying(64) DEFAULT NULL::character varying,
-    meta jsonb
+    type_inst character varying(64) DEFAULT NULL::character varying
 );
 CREATE SEQUENCE identifiers_id_seq
     START WITH 1
@@ -72,8 +71,8 @@ ALTER SEQUENCE identifiers_id_seq OWNED BY identifiers.id;
 ALTER TABLE ONLY identifiers
     ALTER COLUMN id SET DEFAULT nextval('identifiers_id_seq'::regclass);
 ALTER TABLE ONLY identifiers
-    ADD CONSTRAINT identifiers_host_plugin_plugin_inst_type_type_inst_meta_key
-        UNIQUE (host, plugin, plugin_inst, type, type_inst, meta);
+    ADD CONSTRAINT identifiers_host_plugin_plugin_inst_type_type_inst_key
+        UNIQUE (host, plugin, plugin_inst, type, type_inst);
 ALTER TABLE ONLY identifiers
     ADD CONSTRAINT identifiers_pkey PRIMARY KEY (id);
 
@@ -193,7 +192,7 @@ CREATE OR REPLACE FUNCTION collectd_insert(
         character varying, character varying,
         character varying, character varying,
         character varying[], character varying[], double precision[],
-        character varying
+        character varying DEFAULT NULL
     ) RETURNS void
     LANGUAGE plpgsql
     AS $_$
@@ -208,6 +207,7 @@ DECLARE
     -- don't use the type info; for 'StoreRates true' it's 'gauge' anyway
     -- p_type_names alias for $8;
     p_values alias for $9;
+    -- Currently p_meta isn't used
     p_meta alias for $10;
     ds_id integer;
     i integer;
@@ -218,11 +218,10 @@ BEGIN
             AND plugin = p_plugin
             AND COALESCE(plugin_inst, '') = COALESCE(p_plugin_instance, '')
             AND type = p_type
-            AND COALESCE(type_inst, '') = COALESCE(p_type_instance, '')
-            AND meta = to_jsonb(p_meta);
+            AND COALESCE(type_inst, '') = COALESCE(p_type_instance, '');
     IF NOT FOUND THEN
-        INSERT INTO identifiers (host, plugin, plugin_inst, type, type_inst, meta)
-            VALUES (p_host, p_plugin, p_plugin_instance, p_type, p_type_instance, to_jsonb(p_meta))
+        INSERT INTO identifiers (host, plugin, plugin_inst, type, type_inst)
+            VALUES (p_host, p_plugin, p_plugin_instance, p_type, p_type_instance)
             RETURNING id INTO ds_id;
     END IF;
     i := 1;
