@@ -3,7 +3,7 @@
 
 Summary: Statistics collection daemon for filling RRD files
 Name: collectd
-Version: 5.9.2.4.g30e0047
+Version: 5.9.2.6.g2cfdf50
 Release: 1%{?dist}
 License: GPLv2
 Group: System Environment/Daemons
@@ -1162,8 +1162,9 @@ make check
 
 
 %changelog
-* Thu Oct 03 2019 Takuro Ashie <ashie@clear-code.com> - 5.9.2.4.g30e0047
+* Thu Oct 03 2019 Takuro Ashie <ashie@clear-code.com> - 5.9.2.6.g2cfdf50
 - Update the code base to new upstream version 5.9.2
+- Fix broken collectdctl: https://github.com/collectd/collectd/pull/3290
 
 * Thu Jul 18 2019 Takuro Ashie <ashie@clear-code.com> - 5.9.0.5.g6f8b3e1-1
 - Update the code base to new upstream version 5.9.0
