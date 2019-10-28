@@ -219,7 +219,7 @@ BEGIN
             AND COALESCE(plugin_inst, '') = COALESCE(p_plugin_instance, '')
             AND type = p_type
             AND COALESCE(type_inst, '') = COALESCE(p_type_instance, '')
-            AND meta = to_jsonb(p_meta);
+            AND ((meta IS NULL AND p_meta IS NULL) OR meta = to_jsonb(p_meta));
     IF NOT FOUND THEN
         INSERT INTO identifiers (host, plugin, plugin_inst, type, type_inst, meta)
             VALUES (p_host, p_plugin, p_plugin_instance, p_type, p_type_instance, to_jsonb(p_meta))
