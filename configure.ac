@@ -3169,7 +3169,15 @@ else
                                     [
                                       PKG_CHECK_MODULES([LUA], [lua51],
                                         [with_liblua="yes"],
-                                        [with_liblua="no (pkg-config cannot find liblua)"]
+                                        [
+                                          PKG_CHECK_MODULES([LUA], [luajit],
+                                            [
+                                              with_liblua="yes"
+                                              with_libluajit="yes"
+                                            ],
+                                            [with_liblua="no (pkg-config cannot find libluajit)"]
+					  )
+					]
                                       )
                                     ]
                                   )
@@ -3209,6 +3217,11 @@ then
   SAVE_LIBS="$LIBS"
   LIBS="$LIBS $LUA_LIBS"
 
+  if test "x$with_libluajit" = "xyes"
+  then
+    LIBS="$LIBS $LUA_LIBS -lm -ldl"
+  fi
+
   AC_CHECK_FUNC([lua_settop],
     [with_liblua="yes"],
     [with_liblua="no (symbol 'lua_settop' not found)"]
@@ -3221,6 +3234,10 @@ if test "x$with_liblua" = "xyes"
 then
     BUILD_WITH_LIBLUA_CFLAGS="$LUA_CFLAGS"
     BUILD_WITH_LIBLUA_LIBS="$LUA_LIBS"
+    if test "x$with_libluajit" = "xyes"
+    then
+      BUILD_WITH_LIBLUA_LIBS="$LUA_LIBS -lm -ldl"
+    fi
 fi
 AC_SUBST(BUILD_WITH_LIBLUA_CFLAGS)
 AC_SUBST(BUILD_WITH_LIBLUA_LIBS)
