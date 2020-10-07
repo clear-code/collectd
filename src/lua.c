@@ -40,6 +40,7 @@
 
 #include <pthread.h>
 
+#define PLUGIN_INIT 0
 #define PLUGIN_READ 1
 #define PLUGIN_WRITE 2
 
@@ -57,6 +58,10 @@ typedef struct {
 
 static char base_path[PATH_MAX];
 static lua_script_t *scripts;
+
+static size_t lua_init_callbacks_num = 0;
+static clua_callback_data_t *lua_init_callbacks;
+static pthread_mutex_t lua_init_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int clua_store_callback(lua_State *L, int idx) /* {{{ */
 {
@@ -380,6 +385,15 @@ static int lua_cb_register_generic(lua_State *L, int type) /* {{{ */
     if (status != 0)
       return luaL_error(L, "%s", "plugin_register_write failed");
     return 0;
+  } else if (PLUGIN_INIT == type) {
+    int status = lua_cb_register_plugin_callbacks(L, "init", cb->lua_function_name,
+                                                  &lua_init_callbacks_lock,
+                                                  &lua_init_callbacks,
+                                                  &lua_init_callbacks_num,
+                                                  cb);
+    if (status != 0)
+      return luaL_error(L, "lua_cb_register_plugin_callbacks(init) failed");
+    return 0;
   } else {
     return luaL_error(L, "%s", "lua_cb_register_generic unsupported type");
   }
@@ -393,6 +407,10 @@ static int lua_cb_register_write(lua_State *L) {
   return lua_cb_register_generic(L, PLUGIN_WRITE);
 }
 
+static int lua_cb_register_init(lua_State *L) {
+  return lua_cb_register_generic(L, PLUGIN_INIT);
+}
+
 static const luaL_Reg collectdlib[] = {
     {"log_debug", lua_cb_log_debug},
     {"log_error", lua_cb_log_error},
@@ -402,6 +420,7 @@ static const luaL_Reg collectdlib[] = {
     {"dispatch_values", lua_cb_dispatch_values},
     {"register_read", lua_cb_register_read},
     {"register_write", lua_cb_register_write},
+    {"register_init", lua_cb_register_init},
     {NULL, NULL}};
 
 static int open_collectd(lua_State *L) /* {{{ */
@@ -700,10 +719,32 @@ static int lua_shutdown(void) /* {{{ */
 {
   lua_script_free(scripts);
 
+  lua_free_callbacks("init",
+                     &lua_init_callbacks_lock,
+                     &lua_init_callbacks,
+                     lua_init_callbacks_num);
+
   return 0;
 } /* }}} int lua_shutdown */
 
+static int lua_init(void)
+{
+  int status = 0;
+
+  if (lua_init_callbacks_num > 0) {
+    status = lua_execute_callbacks(PLUGIN_CONFIG, "init",
+                                   lua_init_callbacks_lock,
+                                   lua_init_callbacks, lua_init_callbacks_num);
+    if (status != 0) {
+      ERROR("Lua plugin: lua_execute_callbacks failed '%d'", status);
+      return status;
+    }
+  }
+  return status;
+}
+
 void module_register(void) {
   plugin_register_complex_config("lua", lua_config);
+  plugin_register_init("lua", lua_init);
   plugin_register_shutdown("lua", lua_shutdown);
 }
