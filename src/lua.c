@@ -43,6 +43,7 @@
 #define PLUGIN_INIT 0
 #define PLUGIN_READ 1
 #define PLUGIN_WRITE 2
+#define PLUGIN_SHUTDOWN 3
 
 typedef struct lua_script_s {
   lua_State *lua_state;
@@ -62,6 +63,10 @@ static lua_script_t *scripts;
 static size_t lua_init_callbacks_num = 0;
 static clua_callback_data_t *lua_init_callbacks;
 static pthread_mutex_t lua_init_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static size_t lua_shutdown_callbacks_num = 0;
+static clua_callback_data_t *lua_shutdown_callbacks;
+static pthread_mutex_t lua_shutdown_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int clua_store_callback(lua_State *L, int idx) /* {{{ */
 {
@@ -394,6 +399,15 @@ static int lua_cb_register_generic(lua_State *L, int type) /* {{{ */
     if (status != 0)
       return luaL_error(L, "lua_cb_register_plugin_callbacks(init) failed");
     return 0;
+  } else if (PLUGIN_SHUTDOWN == type) {
+    int status = lua_cb_register_plugin_callbacks(L, "shutdown", cb->lua_function_name,
+                                                  &lua_shutdown_callbacks_lock,
+                                                  &lua_shutdown_callbacks,
+                                                  &lua_shutdown_callbacks_num,
+                                                  cb);
+    if (status != 0)
+      return luaL_error(L, "lua_cb_register_plugin_callbacks(shutdown) failed");
+    return 0;
   } else {
     return luaL_error(L, "%s", "lua_cb_register_generic unsupported type");
   }
@@ -411,6 +425,10 @@ static int lua_cb_register_init(lua_State *L) {
   return lua_cb_register_generic(L, PLUGIN_INIT);
 }
 
+static int lua_cb_register_shutdown(lua_State *L) {
+  return lua_cb_register_generic(L, PLUGIN_SHUTDOWN);
+}
+
 static const luaL_Reg collectdlib[] = {
     {"log_debug", lua_cb_log_debug},
     {"log_error", lua_cb_log_error},
@@ -421,6 +439,7 @@ static const luaL_Reg collectdlib[] = {
     {"register_read", lua_cb_register_read},
     {"register_write", lua_cb_register_write},
     {"register_init", lua_cb_register_init},
+    {"register_shutdown", lua_cb_register_shutdown},
     {NULL, NULL}};
 
 static int open_collectd(lua_State *L) /* {{{ */
@@ -717,13 +736,24 @@ static void lua_free_callbacks(const char *label,
 
 static int lua_shutdown(void) /* {{{ */
 {
-  lua_script_free(scripts);
-
+  if (lua_shutdown_callbacks_num > 0) {
+    lua_execute_callbacks(PLUGIN_SHUTDOWN, "shutdown",
+                          lua_shutdown_callbacks_lock,
+                          lua_shutdown_callbacks, lua_shutdown_callbacks_num);
+  }
   lua_free_callbacks("init",
                      &lua_init_callbacks_lock,
                      &lua_init_callbacks,
                      lua_init_callbacks_num);
 
+  lua_free_callbacks("shutdown",
+                     &lua_shutdown_callbacks_lock,
+                     &lua_shutdown_callbacks,
+                     lua_shutdown_callbacks_num);
+
+  lua_script_free(scripts);
+
+  INFO("Lua plugin: lua_shutdown successfully called.");
   return 0;
 } /* }}} int lua_shutdown */
 
