@@ -605,6 +605,75 @@ static int lua_config(oconfig_item_t *ci) /* {{{ */
   return status;
 } /* }}} int lua_config */
 
+static int lua_execute_callbacks(int callback_type,
+                                 const char *label,
+                                 pthread_mutex_t lock,
+                                 clua_callback_data_t *callbacks,
+                                 size_t callbacks_num) /* {{{ */
+{
+  DEBUG("Lua plugin: Number of %s callbacks '%zu'", label, callbacks_num);
+  for (size_t i = 0; i < callbacks_num; i++) {
+    DEBUG("Lua plugin: %s lua_callback[%zu].", label, i);
+    clua_callback_data_t *cb = &callbacks[i];
+    pthread_mutex_lock(&cb->lock);
+    lua_State *L = cb->lua_state;
+    int status = clua_load_callback(L, cb->callback_id);
+    if (status != 0) {
+      ERROR("Lua plugin: Unable to load %s callback \"%s\" (id %i).",
+            label, cb->lua_function_name, cb->callback_id);
+      pthread_mutex_unlock(&cb->lock);
+      return -1;
+    }
+
+    if (callback_type == PLUGIN_CONFIG) {
+      lua_script_t *last = scripts;
+      while (last && last->next != scripts) {
+        DEBUG("Lua plugin: Check configuration key script path '%s'", last->script_path);
+        DEBUG("Lua plugin: Compare '%s' with '%s'", cb->lua_function_name, last->script_path);
+        char *key = dirname(strdup(cb->lua_function_name));
+        if (strstr(key, last->script_path)) {
+          DEBUG("Lua plugin: Global script configuration found '%s'", last->script_path);
+          lua_getglobal(L, last->script_path);
+          free(key);
+          break;
+        }
+        free(key);
+        last = last->next;
+      }
+    }
+
+    DEBUG("Lua plugin: Call %s function '%s'", label, cb->lua_function_name);
+    if (callback_type == PLUGIN_CONFIG) {
+      status = lua_pcall(L, 1, 1, 0);
+    } else {
+      status = lua_pcall(L, 0, 1, 0);
+    }
+    if (status != 0) {
+      const char *errmsg = lua_tostring(L, -1);
+      if (errmsg == NULL)
+        ERROR("Lua plugin: Calling a %s callback failed. "
+              "In addition, retrieving the error message failed.", label);
+      else
+        ERROR("Lua plugin: Calling a %s callback failed: %s", label, errmsg);
+      lua_pop(L, 1);
+      pthread_mutex_unlock(&cb->lock);
+      return -1;
+    }
+    if (!lua_isnumber(L, -1)) {
+      ERROR("Lua plugin: %s function \"%s\" (id %i) did not return a numeric "
+            "status.",
+            label, cb->lua_function_name, cb->callback_id);
+      status = -1;
+    } else {
+      status = (int)lua_tointeger(L, -1);
+    }
+    lua_pop(L, 1);
+    pthread_mutex_unlock(&cb->lock);
+  }
+  INFO("Lua plugin: lua_execute_callback successfully called.");
+  return 0;
+}
+
 static int lua_shutdown(void) /* {{{ */
 {
   lua_script_free(scripts);
