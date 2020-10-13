@@ -674,6 +674,28 @@ static int lua_execute_callbacks(int callback_type,
   return 0;
 }
 
+static void lua_free_callbacks(const char *label,
+                               pthread_mutex_t *lock,
+                               clua_callback_data_t **callbacks,
+                               size_t callbacks_num) /* {{{ */
+{
+  pthread_mutex_lock(lock);
+  DEBUG("Lua plugin: Free allocated '%zu' %s callbacks", callbacks_num, label);
+  for (size_t i = 0; i < callbacks_num; i++) {
+    DEBUG("Lua plugin: Free lua_%s_callbacks[%zu]'", label, i);
+    clua_callback_data_t *cb = *(callbacks + i);
+    free(cb->lua_function_name);
+    pthread_mutex_destroy(&cb->lock);
+    free(*callbacks + i);
+  }
+  if (callbacks_num) {
+    DEBUG("Lua plugin: Free allocated array of callbacks for %s", label);
+    free(*callbacks);
+  }
+  pthread_mutex_unlock(lock);
+  pthread_mutex_destroy(lock);
+} /* }}} lua_free_callbacks */
+
 static int lua_shutdown(void) /* {{{ */
 {
   lua_script_free(scripts);
