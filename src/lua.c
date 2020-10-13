@@ -268,6 +268,41 @@ static void lua_cb_free(void *data) {
   free(cb);
 }
 
+static int lua_cb_register_plugin_callbacks(lua_State *L,
+                                            const char *label,
+                                            const char *function_name,
+                                            pthread_mutex_t *lock,
+                                            clua_callback_data_t **callbacks,
+                                            size_t *callbacks_num,
+                                            clua_callback_data_t *cb) /* {{{ */
+{
+  DEBUG("Lua plugin: Prepare %s callback '%s'", label, function_name);
+  pthread_mutex_lock(lock);
+  DEBUG("Lua plugin: Current number of %s callbacks '%zu'", label, *callbacks_num);
+  clua_callback_data_t *new_callbacks = NULL;
+  if (*callbacks_num == 0) {
+    DEBUG("Lua plugin: Allocate new callbacks for %s %lu",
+          label, sizeof(clua_callback_data_t *));
+    new_callbacks = calloc(1, sizeof(clua_callback_data_t *));
+  } else {
+    DEBUG("Lua plugin: Reallocate new callbacks for %s %lu",
+          label, (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
+    new_callbacks = realloc(*callbacks,
+                            (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
+  }
+  if (new_callbacks == NULL) {
+    pthread_mutex_unlock(lock);
+    return luaL_error(L, "Reallocate %s callback stack failed", label);
+  }
+  *callbacks = new_callbacks;
+  *(callbacks + *callbacks_num) = cb;
+  *callbacks_num = *callbacks_num + 1;
+  pthread_mutex_unlock(lock);
+
+  INFO("Lua plugin: lua_cb_register_plugin_callbacks successfully called.");
+  return 0;
+} /* }}} int lua_cb_register_plugin_callbacks */
+
 static int lua_cb_register_generic(lua_State *L, int type) /* {{{ */
 {
   int nargs = lua_gettop(L);
