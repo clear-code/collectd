@@ -31,6 +31,7 @@
 #include "plugin.h"
 
 #include <lua.h>
+#include <lauxlib.h>
 
 /*
  * access functions (stack -> C)
@@ -40,6 +41,7 @@ int luaC_tostringbuffer(lua_State *L, int idx, char *buffer,
                         size_t buffer_size);
 value_t luaC_tovalue(lua_State *L, int idx, int ds_type);
 value_list_t *luaC_tovaluelist(lua_State *L, int idx);
+int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci);
 
 /*
  * push functions (C -> stack)
