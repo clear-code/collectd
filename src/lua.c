@@ -65,15 +65,15 @@ static char base_path[PATH_MAX];
 static lua_script_t *scripts;
 
 static size_t lua_init_callbacks_num = 0;
-static clua_callback_data_t *lua_init_callbacks;
+static clua_callback_data_t **lua_init_callbacks;
 static pthread_mutex_t lua_init_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static size_t lua_shutdown_callbacks_num = 0;
-static clua_callback_data_t *lua_shutdown_callbacks;
+static clua_callback_data_t **lua_shutdown_callbacks;
 static pthread_mutex_t lua_shutdown_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static size_t lua_config_callbacks_num = 0;
-static clua_callback_data_t *lua_config_callbacks;
+static clua_callback_data_t **lua_config_callbacks;
 static pthread_mutex_t lua_config_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int clua_store_callback(lua_State *L, int idx) /* {{{ */
@@ -290,14 +290,14 @@ static int lua_cb_register_plugin_callbacks(lua_State *L,
                                             const char *label,
                                             const char *function_name,
                                             pthread_mutex_t *lock,
-                                            clua_callback_data_t **callbacks,
+                                            clua_callback_data_t ***callbacks,
                                             size_t *callbacks_num,
                                             clua_callback_data_t *cb) /* {{{ */
 {
   DEBUG("Lua plugin: Prepare %s callback '%s'", label, function_name);
   pthread_mutex_lock(lock);
   DEBUG("Lua plugin: Current number of %s callbacks '%zu'", label, *callbacks_num);
-  clua_callback_data_t *new_callbacks = NULL;
+  clua_callback_data_t **new_callbacks = NULL;
   if (*callbacks_num == 0) {
     DEBUG("Lua plugin: Allocate new callbacks for %s %lu",
           label, sizeof(clua_callback_data_t *));
@@ -312,8 +312,8 @@ static int lua_cb_register_plugin_callbacks(lua_State *L,
     pthread_mutex_unlock(lock);
     return luaL_error(L, "Reallocate %s callback stack failed", label);
   }
+  new_callbacks[*callbacks_num] = cb;
   *callbacks = new_callbacks;
-  *(callbacks + *callbacks_num) = cb;
   *callbacks_num = *callbacks_num + 1;
   pthread_mutex_unlock(lock);
 
@@ -686,13 +686,13 @@ static int lua_config(oconfig_item_t *ci) /* {{{ */
 static int lua_execute_callbacks(int callback_type,
                                  const char *label,
                                  pthread_mutex_t lock,
-                                 clua_callback_data_t *callbacks,
+                                 clua_callback_data_t **callbacks,
                                  size_t callbacks_num) /* {{{ */
 {
   DEBUG("Lua plugin: Number of %s callbacks '%zu'", label, callbacks_num);
   for (size_t i = 0; i < callbacks_num; i++) {
     DEBUG("Lua plugin: %s lua_callback[%zu].", label, i);
-    clua_callback_data_t *cb = &callbacks[i];
+    clua_callback_data_t *cb = callbacks[i];
     pthread_mutex_lock(&cb->lock);
     lua_State *L = cb->lua_state;
     int status = clua_load_callback(L, cb->callback_id);
@@ -754,17 +754,17 @@ static int lua_execute_callbacks(int callback_type,
 
 static void lua_free_callbacks(const char *label,
                                pthread_mutex_t *lock,
-                               clua_callback_data_t **callbacks,
+                               clua_callback_data_t ***callbacks,
                                size_t callbacks_num) /* {{{ */
 {
   pthread_mutex_lock(lock);
   DEBUG("Lua plugin: Free allocated '%zu' %s callbacks", callbacks_num, label);
   for (size_t i = 0; i < callbacks_num; i++) {
     DEBUG("Lua plugin: Free lua_%s_callbacks[%zu]'", label, i);
-    clua_callback_data_t *cb = *(callbacks + i);
+    clua_callback_data_t *cb = (*callbacks)[i];
     free(cb->lua_function_name);
     pthread_mutex_destroy(&cb->lock);
-    free(*callbacks + i);
+    free(cb);
   }
   if (callbacks_num) {
     DEBUG("Lua plugin: Free allocated array of callbacks for %s", label);
