@@ -65,15 +65,15 @@ static char base_path[PATH_MAX];
 static lua_script_t *scripts;
 
 static size_t lua_init_callbacks_num = 0;
-static clua_callback_data_t **lua_init_callbacks;
+static clua_callback_data_t **lua_init_callbacks = NULL;
 static pthread_mutex_t lua_init_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static size_t lua_shutdown_callbacks_num = 0;
-static clua_callback_data_t **lua_shutdown_callbacks;
+static clua_callback_data_t **lua_shutdown_callbacks = NULL;
 static pthread_mutex_t lua_shutdown_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static size_t lua_config_callbacks_num = 0;
-static clua_callback_data_t **lua_config_callbacks;
+static clua_callback_data_t **lua_config_callbacks = NULL;
 static pthread_mutex_t lua_config_callbacks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int clua_store_callback(lua_State *L, int idx) /* {{{ */
@@ -298,16 +298,10 @@ static int lua_cb_register_plugin_callbacks(lua_State *L,
   pthread_mutex_lock(lock);
   DEBUG("Lua plugin: Current number of %s callbacks '%zu'", label, *callbacks_num);
   clua_callback_data_t **new_callbacks = NULL;
-  if (*callbacks_num == 0) {
-    DEBUG("Lua plugin: Allocate new callbacks for %s %lu",
-          label, sizeof(clua_callback_data_t *));
-    new_callbacks = calloc(1, sizeof(clua_callback_data_t *));
-  } else {
-    DEBUG("Lua plugin: Reallocate new callbacks for %s %lu",
-          label, (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
-    new_callbacks = realloc(*callbacks,
-                            (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
-  }
+  DEBUG("Lua plugin: Reallocate new callbacks for %s %lu",
+        label, (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
+  new_callbacks = realloc(*callbacks,
+                          (*callbacks_num + 1) * sizeof(clua_callback_data_t *));
   if (new_callbacks == NULL) {
     pthread_mutex_unlock(lock);
     return luaL_error(L, "Reallocate %s callback stack failed", label);
@@ -769,6 +763,7 @@ static void lua_free_callbacks(const char *label,
   if (callbacks_num) {
     DEBUG("Lua plugin: Free allocated array of callbacks for %s", label);
     free(*callbacks);
+    *callbacks = NULL;
   }
   pthread_mutex_unlock(lock);
   pthread_mutex_destroy(lock);
