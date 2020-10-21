@@ -273,6 +273,10 @@ collectd_LDADD = \
 	$(COMMON_LIBS) \
 	$(DLOPEN_LIBS)
 
+if BUILD_PLUGIN_LUA
+collectd_CFLAGS += $(BUILD_WITH_LIBLUA_CFLAGS)
+collectd_LDFLAGS += $(BUILD_WITH_LIBLUA_LIBS)
+endif
 if BUILD_WIN32
 collectd_SOURCES += src/daemon/cmd_windows.c
 collectd_LDFLAGS += -ldl -Wl,--out-implib,libcollectd.a

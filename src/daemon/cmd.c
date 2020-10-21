@@ -27,6 +27,12 @@
 #include "utils/common/common.h"
 #include <sys/un.h>
 
+#if HAVE_PLUGIN_LUA
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#endif
+
 static void *do_flush(void __attribute__((unused)) * arg) {
   INFO("Flushing all data.");
   plugin_flush(/* plugin = */ NULL,
@@ -165,6 +171,11 @@ static int notify_systemd(void) {
 
 int main(int argc, char **argv) {
   struct cmdline_config config = init_config(argc, argv);
+
+#if HAVE_PLUGIN_LUA
+  lua_State *L = luaL_newstate();
+  lua_close(L);
+#endif
 
 #if COLLECT_DAEMON
   /*
