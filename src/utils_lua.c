@@ -412,6 +412,17 @@ int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci) /* {{{ */
   for (int i = 0; i < ci->children_num; i++) {
     DEBUG("Lua plugin: Push ci->children[%d]", i);
     oconfig_item_t *child = ci->children + i;
+    if (child->children_num > 0) {
+      for (int j = 0; j < i; j++) {
+        oconfig_value_t *cv = child->values;
+        if (cv->type == OCONFIG_TYPE_STRING &&
+            !strcmp(ci->children[j].key, cv->value.string)) {
+          WARNING("Lua plugin: Parent key '%s' and child key <%s %s> is "
+                  "conflicted. Override by child key.",
+                  ci->children[j].key, child->key, cv->value.string);
+        }
+      }
+    }
     luaC_pushOConfigChildItem(L, child);
   }
 
