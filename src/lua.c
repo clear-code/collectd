@@ -790,20 +790,20 @@ static int lua_shutdown(void) /* {{{ */
 static int lua_init(void) {
   int status = 0;
 
-  if (lua_init_callbacks_num > 0) {
-    status =
-        lua_execute_callbacks(PLUGIN_CONFIG, "init", lua_init_callbacks_lock,
-                              lua_init_callbacks, lua_init_callbacks_num);
+  if (lua_config_callbacks_num > 0) {
+    status = lua_execute_callbacks(
+        PLUGIN_CONFIG, "config", lua_config_callbacks_lock,
+        lua_config_callbacks, lua_config_callbacks_num);
     if (status != 0) {
       ERROR("Lua plugin: lua_execute_callbacks failed '%d'", status);
       return status;
     }
   }
 
-  if (lua_config_callbacks_num > 0) {
-    status = lua_execute_callbacks(
-        PLUGIN_CONFIG, "config", lua_config_callbacks_lock,
-        lua_config_callbacks, lua_config_callbacks_num);
+  if (lua_init_callbacks_num > 0) {
+    status =
+        lua_execute_callbacks(PLUGIN_CONFIG, "init", lua_init_callbacks_lock,
+                              lua_init_callbacks, lua_init_callbacks_num);
     if (status != 0) {
       ERROR("Lua plugin: lua_execute_callbacks failed '%d'", status);
       return status;
