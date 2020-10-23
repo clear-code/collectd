@@ -646,25 +646,32 @@ static int lua_config(oconfig_item_t *ci) /* {{{ */
       status = lua_config_base_path(child);
     } else if (strcasecmp("Script", child->key) == 0) {
       status = lua_config_script(child);
+    } else if (strcasecmp("Module", child->key) == 0) {
+      if (scripts) {
+        lua_script_t *last = scripts;
+        while (last && last->next != scripts) {
+          DEBUG("Lua plugin: Create global config for each Module '%s'",
+                last->script_path);
+          if (child->values->type == OCONFIG_TYPE_STRING &&
+              strstr(last->script_path, child->values->value.string)) {
+            status = luaC_pushOConfigItems(last->lua_state, child);
+            if (status != 0) {
+              ERROR("Lua plugin: Unable to parse <Plugin lua> block");
+              return -1;
+            }
+            DEBUG("Lua plugin: Set global '%s'", last->script_path);
+            lua_setglobal(last->lua_state, last->script_path);
+          }
+          last = last->next;
+        }
+      }
+    } else {
+      ERROR("Lua plugin: Specified key is not supported: '%s'", child->key);
     }
   }
   if (status != 0) {
     ERROR("Lua plugin: Unable to handle children of <Plugin lua> block");
     return -1;
-  }
-
-  if (scripts) {
-    lua_script_t *last = scripts;
-    while (last && last->next != scripts) {
-      status = luaC_pushOConfigItems(last->lua_state, ci);
-      if (status != 0) {
-        ERROR("Lua plugin: Unable to parse <Plugin lua> block");
-        return -1;
-      }
-      DEBUG("Lua plugin: Set global '%s'", last->script_path);
-      lua_setglobal(last->lua_state, last->script_path);
-      last = last->next;
-    }
   }
 
   INFO("Lua plugin: lua_config successfully called.");
@@ -801,9 +808,8 @@ static int lua_init(void) {
   }
 
   if (lua_init_callbacks_num > 0) {
-    status =
-        lua_execute_callbacks(PLUGIN_INIT, "init", lua_init_callbacks_lock,
-                              lua_init_callbacks, lua_init_callbacks_num);
+    status = lua_execute_callbacks(PLUGIN_INIT, "init", lua_init_callbacks_lock,
+                                   lua_init_callbacks, lua_init_callbacks_num);
     if (status != 0) {
       ERROR("Lua plugin: lua_execute_callbacks failed '%d'", status);
       return status;
