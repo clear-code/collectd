@@ -802,7 +802,7 @@ static int lua_init(void) {
 
   if (lua_init_callbacks_num > 0) {
     status =
-        lua_execute_callbacks(PLUGIN_CONFIG, "init", lua_init_callbacks_lock,
+        lua_execute_callbacks(PLUGIN_INIT, "init", lua_init_callbacks_lock,
                               lua_init_callbacks, lua_init_callbacks_num);
     if (status != 0) {
       ERROR("Lua plugin: lua_execute_callbacks failed '%d'", status);
