@@ -50,5 +50,7 @@ int luaC_pushcdtime(lua_State *L, cdtime_t t);
 int luaC_pushvalue(lua_State *L, value_t v, int ds_type);
 int luaC_pushvaluelist(lua_State *L, const data_set_t *ds,
                        const value_list_t *vl);
+int luaC_pushNotification(lua_State *L,
+                          const notification_t *notification);
 
 #endif /* UTILS_LUA_H */
