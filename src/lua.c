@@ -306,7 +306,7 @@ static int lua_cb_register_plugin_callbacks(lua_State *L, const char *label,
   *callbacks_num = *callbacks_num + 1;
   pthread_mutex_unlock(&lua_lock);
 
-  INFO("Lua plugin: lua_cb_register_plugin_callbacks successfully called.");
+  DEBUG("Lua plugin: lua_cb_register_plugin_callbacks successfully called.");
   return 0;
 } /* }}} int lua_cb_register_plugin_callbacks */
 
@@ -668,7 +668,7 @@ static int lua_config(oconfig_item_t *ci) /* {{{ */
     return -1;
   }
 
-  INFO("Lua plugin: lua_config successfully called.");
+  DEBUG("Lua plugin: lua_config successfully called.");
   return status;
 } /* }}} int lua_config */
 
@@ -739,7 +739,7 @@ static int lua_execute_callbacks(int callback_type, const char *label,
     lua_pop(L, 1);
     pthread_mutex_unlock(&lua_lock);
   }
-  INFO("Lua plugin: lua_execute_callback successfully called.");
+  DEBUG("Lua plugin: lua_execute_callback successfully called.");
   return 0;
 }
 
@@ -778,7 +778,7 @@ static int lua_shutdown(void) /* {{{ */
 
   lua_script_free(scripts);
 
-  INFO("Lua plugin: lua_shutdown successfully called.");
+  DEBUG("Lua plugin: lua_shutdown successfully called.");
   return 0;
 } /* }}} int lua_shutdown */
 
@@ -804,7 +804,7 @@ static int lua_init(void) {
     }
   }
 
-  INFO("Lua plugin: lua_init successfully called.");
+  DEBUG("Lua plugin: lua_init successfully called.");
   return status;
 }
 

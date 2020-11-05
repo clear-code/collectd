@@ -364,7 +364,7 @@ static int luaC_pushOConfigValue(lua_State *L, const oconfig_item_t *ci,
     break;
   }
 
-  INFO("Lua plugin: luaC_pushOConfigValue successfully called.");
+  DEBUG("Lua plugin: luaC_pushOConfigValue successfully called.");
   return status;
 } /* }}} int luaC_pushOConfigValue */
 
@@ -400,7 +400,7 @@ static int luaC_pushOConfigChildItem(lua_State *L,
           parent->children->children_num, parent->children->key);
   }
 
-  INFO("Lua plugin: luaC_pushOConfigChildItem successfully called.");
+  DEBUG("Lua plugin: luaC_pushOConfigChildItem successfully called.");
   return status;
 } /* }}} int luaC_pushOConfigChildItem */
 
@@ -426,6 +426,6 @@ int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci) /* {{{ */
     luaC_pushOConfigChildItem(L, child);
   }
 
-  INFO("Lua plugin: luaC_pushOConfigItems successfully called.");
+  DEBUG("Lua plugin: luaC_pushOConfigItems successfully called.");
   return 0;
 } /* }}} int luaC_pushOConfigItems */
