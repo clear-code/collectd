@@ -481,13 +481,13 @@ int luaC_pushNotification(lua_State *L,
       lua_pushstring(L, meta->nm_value.nm_string);
       break;
     case NM_TYPE_SIGNED_INT:
-      DEBUG("Lua plugin: Set %s = %li", meta->name,
+      DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
             meta->nm_value.nm_signed_int);
       number = luaL_optnumber(L, meta->nm_value.nm_signed_int, default_number);
       lua_pushnumber(L, number);
       break;
     case NM_TYPE_UNSIGNED_INT:
-      DEBUG("Lua plugin: Set %s = %lu", meta->name,
+      DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
             meta->nm_value.nm_unsigned_int);
       number =
           luaL_optnumber(L, meta->nm_value.nm_unsigned_int, default_number);
