@@ -342,10 +342,10 @@ static int luaC_pushOConfigValue(lua_State *L, const oconfig_item_t *ci,
     lua_pushnumber(L, number);
     if (setkey) {
       lua_setfield(L, -2, ci->key);
-      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_BOOLEAN) %s => '%f'",
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_NUMBER) %s => '%f'",
             ci->key, cv->value.number);
     } else {
-      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_BOOLEAN) => '%f'",
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_NUMBER) => '%f'",
             cv->value.number);
     }
     break;
