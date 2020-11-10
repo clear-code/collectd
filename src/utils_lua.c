@@ -321,8 +321,6 @@ static int luaC_pushOConfigValue(lua_State *L, const oconfig_item_t *ci,
 {
   int status = 0;
   oconfig_value_t *cv = ci->values;
-  lua_Number default_number = 0.0;
-  lua_Number number = 0.0;
 
   DEBUG("Lua plugin: Push ci->value");
   switch (cv->type) {
@@ -338,8 +336,7 @@ static int luaC_pushOConfigValue(lua_State *L, const oconfig_item_t *ci,
     }
     break;
   case OCONFIG_TYPE_NUMBER:
-    number = luaL_optnumber(L, (int)cv->value.number, default_number);
-    lua_pushnumber(L, number);
+    lua_pushnumber(L, cv->value.number);
     if (setkey) {
       lua_setfield(L, -2, ci->key);
       DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_NUMBER) %s => '%f'",
@@ -471,8 +468,6 @@ int luaC_pushNotification(lua_State *L,
     lua_newtable(L);
   }
   while (meta) {
-    lua_Number default_number = 0;
-    lua_Number number = 0;
     meta_count += 1;
     lua_newtable(L);
     switch (meta->type) {
@@ -483,20 +478,16 @@ int luaC_pushNotification(lua_State *L,
     case NM_TYPE_SIGNED_INT:
       DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
             meta->nm_value.nm_signed_int);
-      number = luaL_optnumber(L, meta->nm_value.nm_signed_int, default_number);
-      lua_pushnumber(L, number);
+      lua_pushnumber(L, meta->nm_value.nm_signed_int);
       break;
     case NM_TYPE_UNSIGNED_INT:
       DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
             meta->nm_value.nm_unsigned_int);
-      number =
-          luaL_optnumber(L, meta->nm_value.nm_unsigned_int, default_number);
-      lua_pushnumber(L, number);
+      lua_pushnumber(L, meta->nm_value.nm_unsigned_int);
       break;
     case NM_TYPE_DOUBLE:
       DEBUG("Lua plugin: Set %s = %f", meta->name, meta->nm_value.nm_double);
-      number = luaL_optnumber(L, meta->nm_value.nm_double, default_number);
-      lua_pushnumber(L, number);
+      lua_pushnumber(L, meta->nm_value.nm_double);
       break;
     case NM_TYPE_BOOLEAN:
       DEBUG("Lua plugin: Set %s = %d", meta->name, meta->nm_value.nm_boolean);
