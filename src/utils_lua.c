@@ -24,8 +24,10 @@
  *   Florian Forster <octo at collectd.org>
  **/
 
+#define _GNU_SOURCE
 #include "utils/common/common.h"
 #include "utils_lua.h"
+#include <stdio.h>
 
 static int ltoc_values(lua_State *L, /* {{{ */
                        const data_set_t *ds, value_t *ret_values) {
@@ -313,3 +315,194 @@ int luaC_pushvaluelist(lua_State *L, const data_set_t *ds,
 
   return 0;
 } /* }}} int luaC_pushvaluelist */
+
+static int luaC_pushOConfigValue(lua_State *L, const oconfig_item_t *ci,
+                                 bool setkey) /* {{{ */
+{
+  int status = 0;
+  oconfig_value_t *cv = ci->values;
+
+  DEBUG("Lua plugin: Push ci->value");
+  switch (cv->type) {
+  case OCONFIG_TYPE_STRING:
+    lua_pushstring(L, cv->value.string);
+    if (setkey) {
+      lua_setfield(L, -2, ci->key);
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_STRING) %s => '%s'",
+            ci->key, cv->value.string);
+    } else {
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_STRING) '%s'",
+            cv->value.string);
+    }
+    break;
+  case OCONFIG_TYPE_NUMBER:
+    lua_pushnumber(L, cv->value.number);
+    if (setkey) {
+      lua_setfield(L, -2, ci->key);
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_NUMBER) %s => '%f'",
+            ci->key, cv->value.number);
+    } else {
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_NUMBER) => '%f'",
+            cv->value.number);
+    }
+    break;
+  case OCONFIG_TYPE_BOOLEAN:
+    lua_pushboolean(L, cv->value.boolean);
+    if (setkey) {
+      lua_setfield(L, -2, ci->key);
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_BOOLEAN) %s => '%d'",
+            ci->key, cv->value.boolean);
+    } else {
+      DEBUG("Lua plugin: Push ci->value (OCONFIG_TYPE_BOOLEAN) '%d'",
+            cv->value.boolean);
+    }
+    break;
+  default:
+    WARNING("Lua plugin: Unable to push known lua types ci->value");
+    status = 1;
+    break;
+  }
+
+  DEBUG("Lua plugin: luaC_pushOConfigValue successfully called.");
+  return status;
+} /* }}} int luaC_pushOConfigValue */
+
+static int luaC_pushOConfigChildItem(lua_State *L,
+                                     const oconfig_item_t *parent) /* {{{ */
+{
+  int status = 0;
+  DEBUG("Lua plugin: Current number of config item '%d'", parent->children_num);
+
+  if (parent->children_num == 0) {
+    luaC_pushOConfigValue(L, parent, true);
+  } else {
+    /*
+     * <PARENT_KEY PARENT_VALUE>
+     *   CHILD_KEY CHILD_VALUE
+     * </PARENT>
+     * => PARENT_VALUE = {
+     *      CHILD_KEY = CHILD_VALUE
+     *    }
+     */
+    DEBUG("Lua plugin: process <%d> children of <%s>", parent->children_num,
+          parent->key);
+    DEBUG("Lua plugin: Push value as children's key");
+    luaC_pushOConfigValue(L, parent, false);
+    lua_createtable(L, parent->children_num, 0);
+    for (int i = 0; i < parent->children_num; i++) {
+      DEBUG("Lua plugin: Push child->children[%d]", i);
+      oconfig_item_t *ci = parent->children + i;
+      luaC_pushOConfigChildItem(L, ci);
+    }
+    lua_settable(L, -3);
+    DEBUG("Lua plugin: %d children of %s processed",
+          parent->children->children_num, parent->children->key);
+  }
+
+  DEBUG("Lua plugin: luaC_pushOConfigChildItem successfully called.");
+  return status;
+} /* }}} int luaC_pushOConfigChildItem */
+
+int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci) /* {{{ */
+{
+  DEBUG("Lua plugin: Current number of config item '%d'", ci->children_num);
+
+  lua_createtable(L, ci->children_num, 0);
+  for (int i = 0; i < ci->children_num; i++) {
+    DEBUG("Lua plugin: Push ci->children[%d]", i);
+    oconfig_item_t *child = ci->children + i;
+    if (child->children_num > 0) {
+      for (int j = 0; j < i; j++) {
+        oconfig_value_t *cv = child->values;
+        if (cv->type == OCONFIG_TYPE_STRING &&
+            !strcmp(ci->children[j].key, cv->value.string)) {
+          WARNING("Lua plugin: Parent key '%s' and child key <%s %s> is "
+                  "conflicted. Override by child key.",
+                  ci->children[j].key, child->key, cv->value.string);
+        }
+      }
+    }
+    luaC_pushOConfigChildItem(L, child);
+  }
+
+  DEBUG("Lua plugin: luaC_pushOConfigItems successfully called.");
+  return 0;
+} /* }}} int luaC_pushOConfigItems */
+
+int luaC_pushNotification(lua_State *L,
+                          const notification_t *notification) /* {{{ */
+{
+  DEBUG("Lua plugin: luaC_pushNotification called.");
+
+  lua_newtable(L);
+
+  DEBUG("Lua plugin: Notification severity: <%d>", notification->severity);
+  lua_pushinteger(L, notification->severity);
+  lua_setfield(L, -2, "severity");
+
+  luaC_pushcdtime(L, notification->time);
+  lua_setfield(L, -2, "time");
+
+  lua_pushstring(L, notification->message);
+  lua_setfield(L, -2, "message");
+
+  lua_pushstring(L, notification->host);
+  lua_setfield(L, -2, "host");
+
+  lua_pushstring(L, notification->plugin);
+  lua_setfield(L, -2, "plugin");
+
+  lua_pushstring(L, notification->plugin_instance);
+  lua_setfield(L, -2, "plugin_instance");
+
+  lua_pushstring(L, notification->type);
+  lua_setfield(L, -2, "type");
+
+  lua_pushstring(L, notification->type_instance);
+  lua_setfield(L, -2, "type_instance");
+
+  int meta_count = 0;
+  notification_meta_t *meta = notification->meta;
+  if (meta) {
+    /* Setup empty table for 'meta' key */
+    lua_newtable(L);
+  }
+  while (meta) {
+    meta_count += 1;
+    lua_newtable(L);
+    switch (meta->type) {
+    case NM_TYPE_STRING:
+      DEBUG("Lua plugin: Set %s = %s", meta->name, meta->nm_value.nm_string);
+      lua_pushstring(L, meta->nm_value.nm_string);
+      break;
+    case NM_TYPE_SIGNED_INT:
+      DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
+            meta->nm_value.nm_signed_int);
+      lua_pushnumber(L, meta->nm_value.nm_signed_int);
+      break;
+    case NM_TYPE_UNSIGNED_INT:
+      DEBUG("Lua plugin: Set %s = %" PRIu64, meta->name,
+            meta->nm_value.nm_unsigned_int);
+      lua_pushnumber(L, meta->nm_value.nm_unsigned_int);
+      break;
+    case NM_TYPE_DOUBLE:
+      DEBUG("Lua plugin: Set %s = %f", meta->name, meta->nm_value.nm_double);
+      lua_pushnumber(L, meta->nm_value.nm_double);
+      break;
+    case NM_TYPE_BOOLEAN:
+      DEBUG("Lua plugin: Set %s = %d", meta->name, meta->nm_value.nm_boolean);
+      lua_pushboolean(L, meta->nm_value.nm_boolean);
+      break;
+    }
+    lua_setfield(L, -2, meta->name);
+    lua_rawseti(L, -2, meta_count);
+    meta = meta->next;
+  }
+  DEBUG("Lua plugin: Number of meta: <%d>", meta_count);
+  if (meta_count > 0) {
+    lua_setfield(L, -2, "meta");
+  }
+
+  DEBUG("Lua plugin: luaC_pushNotification successfully called.");
+  return 0;
+} /* }}} int luaC_pushNotification */
