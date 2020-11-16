@@ -30,8 +30,8 @@
 #include "collectd.h"
 #include "plugin.h"
 
-#include <lua.h>
 #include <lauxlib.h>
+#include <lua.h>
 
 /*
  * access functions (stack -> C)
@@ -42,6 +42,7 @@ int luaC_tostringbuffer(lua_State *L, int idx, char *buffer,
 value_t luaC_tovalue(lua_State *L, int idx, int ds_type);
 value_list_t *luaC_tovaluelist(lua_State *L, int idx);
 int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci);
+int luaC_tonotification(lua_State *L, notification_t *notification);
 
 /*
  * push functions (C -> stack)
@@ -50,7 +51,6 @@ int luaC_pushcdtime(lua_State *L, cdtime_t t);
 int luaC_pushvalue(lua_State *L, value_t v, int ds_type);
 int luaC_pushvaluelist(lua_State *L, const data_set_t *ds,
                        const value_list_t *vl);
-int luaC_pushNotification(lua_State *L,
-                          const notification_t *notification);
+int luaC_pushNotification(lua_State *L, const notification_t *notification);
 
 #endif /* UTILS_LUA_H */
