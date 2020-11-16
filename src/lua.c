@@ -213,15 +213,12 @@ static int clua_notification(const notification_t *notify,
 {
   clua_callback_data_t *cb = ud->data;
 
-  pthread_mutex_lock(&lua_lock);
-
   lua_State *L = cb->lua_state;
 
   int status = clua_load_callback(L, cb->callback_id);
   if (status != 0) {
     ERROR("Lua plugin: Unable to load callback \"%s\" (id %i).",
           cb->lua_function_name, cb->callback_id);
-    pthread_mutex_unlock(&lua_lock);
     return -1;
   }
   /* +1 = 1 */
@@ -230,7 +227,6 @@ static int clua_notification(const notification_t *notify,
   status = luaC_pushNotification(L, notify);
   if (status != 0) {
     lua_pop(L, 1); /* -1 = 0 */
-    pthread_mutex_unlock(&lua_lock);
     ERROR("Lua plugin: luaC_pushNotification failed.");
     return -1;
   }
@@ -246,7 +242,6 @@ static int clua_notification(const notification_t *notify,
       ERROR("Lua plugin: Calling the notification callback failed:\n%s",
             errmsg);
     lua_pop(L, 1); /* -1 = 0 */
-    pthread_mutex_unlock(&lua_lock);
     return -1;
   }
 
@@ -261,9 +256,37 @@ static int clua_notification(const notification_t *notify,
   }
 
   lua_pop(L, 1); /* -1 = 0 */
-  pthread_mutex_unlock(&lua_lock);
   return status;
 } /* }}} int clua_notification */
+
+int clua_dispatch_notification(lua_State *L) /* {{{ */
+{
+  DEBUG("Lua plugin: clua_dispatch_notification called");
+
+  int nargs = lua_gettop(L);
+
+  if (nargs != 1)
+    return luaL_error(L, "Invalid number of arguments (%d != 1)", nargs);
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+
+  DEBUG("Lua plugin: check whether table is passed to dispatch_notification.");
+
+  notification_t *notif = calloc(1, sizeof(notification_t));
+  if (!notif) {
+    return luaL_error(L, "Failed to allocate notification_t");
+  }
+
+  if (luaC_tonotification(L, notif)) {
+    return luaL_error(L, "Failed to convert table into notification_t");
+  }
+
+  plugin_dispatch_notification(notif);
+
+  DEBUG("Lua plugin: clua_dispatch_notification successfully called.");
+
+  return 0;
+} /* }}} static int clua_dispatch_notification */
 
 /*
  * Exported functions
@@ -741,6 +764,17 @@ static int lua_config(oconfig_item_t *ci) /* {{{ */
   if (status != 0) {
     ERROR("Lua plugin: Unable to handle children of <Plugin lua> block");
     return -1;
+  }
+
+  if (scripts) {
+    lua_script_t *last = scripts;
+    while (last && last->next != scripts) {
+      DEBUG("Lua plugin: Register dispatch_notification to '%s'",
+            last->script_path);
+      lua_register(last->lua_state, "dispatch_notification",
+                   clua_dispatch_notification);
+      last = last->next;
+    }
   }
 
   DEBUG("Lua plugin: lua_config successfully called.");

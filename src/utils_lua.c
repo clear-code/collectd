@@ -506,3 +506,122 @@ int luaC_pushNotification(lua_State *L,
   DEBUG("Lua plugin: luaC_pushNotification successfully called.");
   return 0;
 } /* }}} int luaC_pushNotification */
+
+int luaC_tonotification(lua_State *L, notification_t *notification) /* {{{ */
+{
+  const char *notification_keys[] = {
+      "severity",        "time", "message",       "host", "plugin",
+      "plugin_instance", "type", "type_instance", "meta", NULL};
+  int i = 0;
+  while (notification_keys[i]) {
+    size_t len = 0;
+    char const *buf = NULL;
+    char const *key = notification_keys[i];
+    lua_getfield(L, -1, key);
+    int type = lua_type(L, -1);
+    switch (type) {
+    case LUA_TNUMBER:
+      DEBUG("Lua plugin: keys[%d] LUA_TNUMBER: <%s>", i, notification_keys[i]);
+      if (!strcmp(key, "severity")) {
+        notification->severity = lua_tonumber(L, -1);
+        DEBUG("Lua plugin: severity: <%f>", lua_tonumber(L, -1));
+      } else if (!strcmp(key, "time")) {
+        DEBUG("Lua plugin: time: <%f>", lua_tonumber(L, -1));
+        notification->time = luaC_tocdtime(L, -1);
+      } else {
+        WARNING("Lua plugin: unknown key for notification: <%s>", key);
+      }
+      break;
+    case LUA_TSTRING:
+      DEBUG("Lua plugin: keys[%d] LUA_TSTRING: <%s>", i, notification_keys[i]);
+      if (!strcmp(key, "message") || !strcmp(key, "host") ||
+          !strcmp(key, "plugin") || !strcmp(key, "plugin_instance") ||
+          !strcmp(key, "type") || !strcmp(key, "type_instance")) {
+        buf = lua_tolstring(L, -1, &len);
+        DEBUG("Lua plugin: value of <%s> length: <%zd>", key, len);
+        if (len >= DATA_MAX_NAME_LEN) {
+          WARNING("Lua plugin: key <%s> must be shorter than <%d>", key,
+                  DATA_MAX_NAME_LEN);
+          break;
+        }
+        if (!strcmp(key, "message")) {
+          ssnprintf(notification->message, sizeof(notification->message), "%s",
+                    buf);
+        } else if (!strcmp(key, "host")) {
+          ssnprintf(notification->host, sizeof(notification->host), "%s", buf);
+        } else if (!strcmp(key, "plugin")) {
+          ssnprintf(notification->plugin, sizeof(notification->plugin), "%s",
+                    buf);
+        } else if (!strcmp(key, "plugin_instance")) {
+          ssnprintf(notification->plugin_instance,
+                    sizeof(notification->plugin_instance), "%s", buf);
+        } else if (!strcmp(key, "type")) {
+          ssnprintf(notification->type, sizeof(notification->type), "%s", buf);
+        } else if (!strcmp(key, "type_instance")) {
+          ssnprintf(notification->type_instance,
+                    sizeof(notification->type_instance), "%s", buf);
+        }
+      } else {
+        WARNING("Lua plugin: unknown key for notification: <%s>", key);
+        break;
+      }
+      DEBUG("Lua plugin: copy key: <%s>", key);
+      break;
+    case LUA_TTABLE:
+      DEBUG("Lua plugin: keys[%d] LUA_TTABLE: <%s>", i, notification_keys[i]);
+      if (!strcmp(key, "meta")) {
+        lua_objlen(L, -2);
+        len = lua_tonumber(L, -1);
+        DEBUG("Lua plugin: size of meta: <%zd>", len);
+        if (len == 0)
+          break;
+        notification->meta = calloc(len, sizeof(notification_meta_t));
+        int j = 0;
+        for (j = 0; j < len; j++) {
+          lua_rawgeti(L, -1, j);
+          lua_pushnil(L);
+          while (lua_next(L, -2)) {
+            type = lua_type(L, -1);
+            switch (type) {
+            case LUA_TSTRING:
+              strcpy(notification->meta[i].name, lua_tostring(L, -2));
+              notification->meta[j].nm_value.nm_string = lua_tostring(L, -2);
+              notification->meta[j].type = NM_TYPE_STRING;
+              notification->meta[j].next = &notification->meta[i + 1];
+              break;
+            case LUA_TNUMBER:
+              /* Note that the value of number is always treated as double */
+              strcpy(notification->meta[i].name, lua_tostring(L, -2));
+              notification->meta[j].nm_value.nm_double = lua_tonumber(L, -1);
+              notification->meta[j].type = NM_TYPE_DOUBLE;
+              notification->meta[j].next = &notification->meta[j + 1];
+              break;
+            default:
+              WARNING("Lua plugin: value of meta[%d][%s] must be LUA_TSTRING "
+                      "or LUA_TNUMBER",
+                      j, lua_tostring(L, -2));
+              break;
+            }
+          }
+        }
+        notification->meta[j - 1].next = &(notification->meta[0]);
+      } else {
+        WARNING("Lua plugin: key of values must be 'meta': <%s>", key);
+      }
+      break;
+    case LUA_TNONE:
+      WARNING("Lua plugin: non acceptable index should not specified: <%d>", i);
+      break;
+    default:
+      WARNING(
+          "Lua plugin: key must be type of LUA_TNUMBER or LUA_TSTRING: <%s>",
+          key);
+      break;
+    }
+    /* pop each value of keys */
+    lua_pop(L, 1);
+    DEBUG("Lua plugin: next index of keys: <%d>", i + 1);
+    i++;
+  }
+  return 0;
+} /* }}} int luaC_notificaion */
