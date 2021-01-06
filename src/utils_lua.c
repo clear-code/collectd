@@ -414,6 +414,11 @@ int luaC_pushOConfigItems(lua_State *L, const oconfig_item_t *ci) /* {{{ */
     if (child->children_num > 0) {
       for (int j = 0; j < i; j++) {
         oconfig_value_t *cv = child->values;
+        if (!cv) {
+          ERROR("Lua plugin: key must be specified <%s KEY>: <%s (nil)>",
+                ci->key, ci->key);
+          return -1;
+        }
         if (cv->type == OCONFIG_TYPE_STRING &&
             !strcmp(ci->children[j].key, cv->value.string)) {
           WARNING("Lua plugin: Parent key '%s' and child key <%s %s> is "
