@@ -3,7 +3,7 @@
 
 Summary: Statistics collection daemon for filling RRD files
 Name: collectd
-Version: 5.12.0.13.g684dfc5
+Version: 5.12.0.16.g6e9604f
 Release: 5%{?dist}
 License: GPLv2
 URL: https://collectd.org/
@@ -1042,6 +1042,11 @@ make check
 
 
 %changelog
+* Fri Jan 01 2021 Takuro Ashie <ashie@clear-code.com> - 5.12.0.16.g6e9604f
+- Add dispatching notification feature to lua plugin
+- Fix broken "-t" option
+  https://github.com/collectd/collectd/pull/3793
+
 * Wed Dec 23 2020 Takuro Ashie <ashie@clear-code.com> - 5.12.0.13.g684dfc5
 - Update the code base to new upstream version 5.12.0
 - Add some missing features to lua plugin
